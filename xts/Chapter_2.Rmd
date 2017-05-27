@@ -1,0 +1,189 @@
+---
+title: "Data Camp / xts - Chapter 2"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Chapter 2 of Data Camp xts class excersizes
+
+xts uses the [ISO-8601 standard](https://en.wikipedia.org/wiki/ISO_8601) for time storage.  The standard defines
+time formats as well as ranges.
+
+It is **important** to follow the standard exactly when indexing on dates.  The [subset](https://www.rdocumentation.org/packages/xts/versions/0.9-7/topics/%5B.xts) and [.parseISO8601](https://www.rdocumentation.org/packages/xts/versions/0.9-7/topics/.parseISO8601) documentation provies more details.
+
+For full details see the [ISO page for ISO-8601](https://www.iso.org/iso-8601-date-and-time-format.html)
+
+#### Some subsetting examples
+
+```{r}
+library(xts)
+
+dates <- seq.Date(as.Date('2015-06-01'), 
+                  as.Date('2016-04-01'),
+                  by='day')
+
+x <- xts(x=rnorm(length(dates)), 
+         order.by=dates)
+
+x_2016 <- x['2016']
+
+jan_march <- x['2016/20160322']
+
+print(str(x_2016))
+print(str(jan_march))
+
+82 == length(jan_march)
+```
+
+### Date + Time info
+
+```{r}
+
+date_times <- seq(as.POSIXct('2010-01-01T00:00:00'), as.POSIXct('2010-12-31T23:59:00'), by='hour')
+str(date_times)
+
+irreg <- xts(x=runif(length(date_times)),
+             order.by=date_times)
+
+morn_2010 <- irreg['T08/T10:00']
+str(morn_2010)
+
+morn_2010['2010-01-13']
+```
+
+### Alternative methods of extraction
+
+_matrix_ like integer vectors  
+_matrix_ like logical vectors  
+Using POSIX or Date types (not common, or recommended)  
+
+### Modifying data
+Can use all supported indexing methods to update values in the xts object.
+
+Also, **which.i=* option, which, liek the `which()` function, retuns the indexes of the rows instead of a matrix.
+
+### Key behaviors
+
+* All subsets preserve matrix (drop = FALSE).  xts always returns a matrix.
+* Order is preserved.
+* Binary search and memcpy are faster than base R!
+* index and xts attributes are generally preserved.
+
+## Example of replacement
+
+```{r}
+x <- xts(0:50,
+         as.Date('2016-03-01') + 0:50)
+
+dates <- as.Date('2016-03-10') + 0:5
+
+x[dates] <- NA
+
+print(x['20160308/17'])
+
+x['20160401/'] <- 0
+print(x['20160320/'])
+```
+
+### Finding times of interest
+
+* R uses `head()` & `tail()` to look at the start and end of a series
+* xts implements 2 similar with respect to time
+  * uses a flexible notion of time
+  * i.e. "last 3 days" or "first 6 weeks"
+* These are the `first()` and `last()` functions
+
+value can be soemthing like:
+
+* "4 months", " 1 year", etc.
+* can use numeric values.
+
+`first()` and `last()` can be nested.
+
+```{r}
+read.table(header=TRUE, text ="
+           Temp.Max Temp.Mean Temp.Min
+2016-07-01       74        69       60
+2016-07-02       78        66       56
+2016-07-03       79        68       59
+2016-07-04       80        76       69
+2016-07-05       90        79       68
+2016-07-06       89        79       70
+2016-07-07       87        78       72
+2016-07-08       89        80       72
+2016-07-09       81        73       67
+2016-07-10       83        72       64
+2016-07-11       93        81       69
+2016-07-12       89        82       77
+2016-07-13       86        78       68
+2016-07-14       89        80       68
+2016-07-15       75        72       60
+2016-07-16       79        69       60") -> t
+
+temps <- as.xts(t)
+
+# Create lastweek using the last 1 week of temps
+lastweek <- last(temps, "1 week")
+
+# Print the last 2 observations in lastweek
+last(lastweek, n=2)
+
+# Extract all but the first two days of lastweek
+first(lastweek, "-2 days")
+```
+
+### Compound `first()` & `last()`
+
+```{r}
+# Extract the first three days of the second week of temps
+first(last(first(temps, "2 weeks"), "1 week"), "3 days")
+```
+
+## Math operations
+
+### Key faatures
+
+* xts is naturally a matrix
+  * Most operations are standard matrix
+* **Math operations are on the _intersection_ of times**
+  * 2 objects will first be merged on the time index then the operation applied
+* Sometimes it's necessary to drop the xts class
+  * argument drop = TRUE, coredata(), or as.numeric()
+* Special handling required for _union_ of dates
+
+### Operations on unions
+* May be necessary to use all observations
+
+### Example
+
+```{r}
+a <- as.xts(read.table(header=TRUE, text="
+           a
+2015-01-24 1
+2015-01-25 1
+2015-01-26 1"))
+
+b <- as.xts(read.table(header=TRUE, text="
+           b
+2015-01-24 2"))
+
+print(a + b)
+
+a + as.numeric(b)
+```
+
+### Merging example
+
+Merging is covered in Chapter 3 but here's an example of what's possible.
+
+```{r}
+# Add a to b, and fill all missing rows of b with 0
+a + merge(b, index(a), fill = 0)
+
+# Add a to b and fill NAs with the last observation
+a + merge(b, index(a), fill = na.locf)
+```
+
+
+

@@ -1,0 +1,271 @@
+---
+title: "Data Camp / xts - Chapter 3"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Chapter 3 of Data Camp xts class excersizes
+
+## Merging data
+
+### merge() / cbind()
+
+`merge()` & `cbind()` merge xts by columns
+
+Like data base joins but on dates.
+
+Inner, outer, left and right joins.
+
+Defaults is an "outer" join:
+
+`merge(x, y)`
+
+merges all rows of x and y and fills in missing values with NA.
+
+`merge(x, y, join='inner')`
+
+merges only rows where both data objects have data for the same dates.
+
+`merge(x, y, join='right', fill=na.locf)`
+
+merges rows based on dates in the right side (y in this example).  Missing values for x will be filled with NA,
+except that we specified the fill=na.locf, which tells it to fill with the last records value.
+
+Additionally merging a 'c' vector adds it as a new column.
+
+`merge(x, c(2, 3, 4))`
+
+and adding a scalar value will add a new column as well.
+
+`merge(x, 5)`
+
+**Normal R recycling rule apply.**
+
+Adding a vector of time objects is also possible.  This will add missing dates in the series, initializing to NA or whatever method is indicated by the _fill=_ argument.
+
+### rbind()
+
+* Combine weries by **row**
+* Rows inserted in tim order SO ...
+* All rows in `rbind()` must have a time
+* The number of columns must match
+
+**NOTE**: The result may have duplicate time indexes if both objects have values with the same time index.
+
+#### Some merge examples
+
+```{r}
+library(xts)
+
+a <- as.xts(read.table(header=TRUE, text="
+                    a
+2016-06-05 -1.2070657
+2016-06-08  0.2774292
+2016-06-09  1.0844412
+2016-06-13 -2.3456977"))
+
+b <- as.xts(read.table(header=TRUE, text="
+                    b
+2016-06-05  0.4291247
+2016-06-06  0.5060559
+2016-06-08 -0.5747400
+2016-06-09 -0.5466319"))
+
+merge(a, b, join='inner')
+
+merge(a, b, join='left', fill=0)
+```
+
+### Some rbind examples
+
+```{r}
+temps <- as.xts(read.table(header=TRUE, text="
+           Temp.Max Temp.Mean Temp.Min
+2016-07-01       74        69       60
+2016-07-02       78        66       56
+2016-07-03       79        68       59
+2016-07-04       80        76       69
+2016-07-05       90        79       68
+2016-07-06       89        79       70
+2016-07-07       87        78       72
+2016-07-08       89        80       72
+2016-07-09       81        73       67
+2016-07-10       83        72       64
+2016-07-11       93        81       69
+2016-07-12       89        82       77
+2016-07-13       86        78       68
+2016-07-14       89        80       68
+2016-07-15       75        72       60
+2016-07-16       79        69       60"))
+
+temps_june30 <- as.xts(read.table(header=TRUE, text="
+           temp_max temp_mean temp_min
+2016-06-30       75        73       63"))
+
+temps_july17 <- as.xts(read.table(header=TRUE, text="
+           temp_max temp_mean temp_min
+2016-07-17       79        70       68"))
+
+temps_july18 <- as.xts(read.table(header=TRUE, text="
+           temp_max temp_mean temp_min
+2016-07-18       75        70       65"))
+
+# Row bind temps_june30 to temps, assign this to temps2
+temps2 <- rbind(temps, temps_june30)
+
+# Row bind temps_july17 and temps_july18 to temps2, call this temps3
+temps3 <- rbind(temps2, temps_july17, temps_july18)
+
+print(temps2)
+print(temps3)
+```
+
+### Handling Missingness
+
+xts inherits the zoo missingness functionality.
+
+* l.o.c.f "last observation caried forward" - Fill NA's with last observations values.
+
+> na.locf(object,
+          na.rm=TRUE,
+          fromLast=FALSE,
+          maxgap=Inf)
+          
+na.rm    - Should leading NA's be removed?
+fromLast - Should the value from the next value obs be used instead of previous.  n.o.c.f "next obs...."
+maxgap   - How many to replace before stopping
+
+#### Fill all NAs
+
+* Replace NA's
+
+> na.fill(object, fill, ...)
+
+* Remove NA's
+
+> na.trim(object, ...)
+> na.omit(object, ...)
+
+* Interpolate NA's
+
+The use of these should be carefully considered since they look forward in the data and could introduce look-ahead bias into the data which can affect forecasting.
+
+> na.approx(object, ...)
+> na.split(object, ...)
+
+### Example
+
+```{r}
+temps <- as.xts(read.table(header=TRUE, text="
+           Temp.Max Temp.Mean Temp.Min
+2016-07-01       74        69       60
+2016-07-02       78        NA       56
+2016-07-03       79        NA       59
+2016-07-04       80        76       69
+2016-07-05       90        79       68"))
+
+temps_last <- na.locf(temps)
+
+temps_next <- na.locf(temps, fromLast=TRUE)
+
+print(temps_last)
+print(temps_next)
+```
+
+#### na.approx()
+
+Let's look at an example of na.approx using the AirPassengers data.
+
+1. First make it an xts
+2. Sub-set the data to 1960
+2. duplicate the data columnn replacing some of the data with NA's
+
+```{r}
+AirPass <- as.xts(AirPassengers)['1960']
+indexFormat(AirPass) <- '%Y-%m-%d'
+nr <- coredata(AirPass)
+nr[c(3,4,5)] <- NA
+
+AirPass <- cbind(AirPass, nr)
+names(AirPass) <- c('original', 'missing')
+print(AirPass)
+
+na.approx(AirPass)
+na.spline((AirPass))
+```
+
+## Seasonality and stationarity
+
+### lag  (backshift operation)
+
+What if you want to compare today's value with yesterdays?
+
+`lag()` operator will shift times to shift times back, or forward.
+
+> lag(x, 
+      k=1, 
+      na.pad=TRUE, ...)
+
+* k controls number of lags
+* na.pad controls NA introduction
+
+
+#### Differences with zoo and ts lag()
+
+* Positive k is forward, negative k is backward.  zoo and ts are the opposite.
+* How missingness is handled after the shift
+
+k can be a vector of values which will cause a new matrix with 1 column for each lag specified in the vector.
+
+### diff
+
+Calculate the difference of a lag.
+
+> diff(x,
+      lag=1,
+      differences=1,
+      arithmetic=TRUE,
+      log=FALSE,
+      na.pad=TRUE, ...)
+      
+      
+### Example of lag()
+
+```{r}
+x <- as.xts(read.table(header=TRUE, text="
+           x
+2017-05-22 5
+2017-05-23 6
+2017-05-24 7
+2017-05-25 8
+2017-05-26 9"))
+
+# "lead of x" means go back in time
+lead_x <- lag(x, k=(-1))
+
+# "lag of x" means go forward in time
+lag_x <- lag(x, k=1)
+
+z <- merge(lead_x, x, lag_x)
+
+print(lead_x)
+print(lag_x)
+print(z)
+```
+      
+### example of diff()
+
+```{r}
+AirPass <- as.xts(AirPassengers)
+indexFormat(AirPass) <- '%Y-%m-%d'
+names(AirPass) <- c('passengers')
+
+diff_by_hand <- AirPass - lag(AirPass, k=1)
+
+cbind(head(diff_by_hand), head(diff(AirPass)))
+
+head(cbind(AirPass, diff(AirPass, lag = 12, differences = 1)), n=36)
+```
+
+
