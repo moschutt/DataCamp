@@ -1,8 +1,8 @@
 ---
 title: "Data Camp / xts - Chapter 5"
 output:
-  html_notebook: default
   pdf_document: default
+  html_notebook: default
 ---
 
 Initialize and load the data

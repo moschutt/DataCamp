@@ -1,0 +1,175 @@
+---
+title: "Data Camp / Intro to Time Series Analysis - Chapter 1"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(datasets)
+data(AirPassangers)
+```
+
+Chapter 1 of [Data Camp - Intro to Time Series Analsys](https://www.datacamp.com/courses/introduction-to-time-series-analysis)
+
+**Def**: A time series is a sequence of data in chronological order
+
+`print()` prints the data with time stamps and includes the start, end and frequency informatino.
+
+`plot()` plots a time series with time on the horizontal axis.
+
+The course will cover basic time series models
+
+* White Noise (WN)
+* Random Walk (RW)
+* Autoregression (AR)
+* Simple Moving Average (MA)
+
+### Examples
+
+```{r}
+data(Nile)
+
+class(Nile)
+
+str(Nile)
+
+print(Nile)
+
+length(Nile)
+
+head(Nile, n=5)
+tail(Nile, n=5)
+```
+
+The `plot()` function "knows" about time series and will plot them appropriately. Here are some examples
+
+```{r fig.height=10}
+par(mfrow=c(3, 1))
+
+plot(Nile)
+plot(Nile, 
+     xlab = "Year", 
+     ylab = "River Volume (1e9 m^{3})")
+
+plot(Nile, 
+     xlab="Year", 
+     ylab="River Volumne (1e9 m^{3})", 
+     main="Annual River Nile Volume at Aswan, 1871-1970",
+     type='b')
+```
+
+The **ts** version of `plot()` provides for a _y=_ value which will be used as the "y" axis values.
+
+When plotting a _Continuous time index_ the points will not be evenly spaced, they will be spaced based on the
+_continuous_ value.  To addresss this, you can create a _discrete_ index.
+
+```{r}
+cti = 1:20 + runif(20)
+cts = c(rnorm(10), rnorm(10))
+dti = 1:20
+
+par(mfrow=c(2, 1))
+
+plot(cti, cts, type='b')
+plot(dti, cts, type='b')
+```
+
+### Sampling Frequency
+
+Time series data can be equally spaced, such as hourly temperature measurements, or unevently spaced such as the temperature every time you check e-mail.  Time series can also have _missing_ values.  For example, stocks are not traded on weekends, so there will be missing daily data for Saturdays and Sundays as well as possible holidays.
+
+There are some _assumptions_ made about a time series.
+
+* Consecutive obs are equally spaced
+* The have a discrete-time observation index
+* This may hold _approximately_ as in the case of stock trading with weekends and holidays missing.
+
+4 Functions can be used to validate a time series.
+
+* `start()`, which will return the start values, i.e. 1 1 may indicate it starts on hour 1 of day 1
+* `end()`, returns the end values.  i.e. 1 24 may indicate it ends on hour 24 of day 1
+* `frequency()` returns the frequency, how many observations.  i.e. 24
+* `deltat()` returns the time interval duration.  i.e. 0.0417 is 1/24 or hourly.
+* `cycle()` returns the position of an obs in the cycle of each obs.
+
+```{r}
+plot(AirPassengers)
+print("Start")
+start(AirPassengers)
+print("end")
+end(AirPassengers)
+
+print("time")
+time(AirPassengers)
+print("deltat")
+deltat(AirPassengers)
+print("frequency")
+frequency(AirPassengers)
+print("cycle")
+cycle(AirPassengers)
+```
+
+### Missing values.
+
+Missingness is represented by NA in R.  There are many way's to handle it and differnet functions in R handle it differently.  Missing data can be removed or imputed (calculated) from the remaining data.
+
+```{r}
+data("AirPassengers")
+AirPassengers[seq((7*12)+1, length.out=12)] <- NA  # NA out 19576
+
+par(mfrow=c(2, 1))
+plot(AirPassengers)
+
+AirPassengers[85:96] <- mean(AirPassengers, na.rm = TRUE)
+
+plot(AirPassengers)
+
+data("AirPassengers")
+points(AirPassengers, type = "l", col = 2, lty = 3)
+```
+
+### The **ts** class
+
+To turn something into a time series use the `ts()` function.
+
+```{r}
+data_vector = rnorm(50)
+
+head(data_vector)
+par(mfrow=c(2, 1))
+
+plot(data_vector)
+
+time_series = ts(data_vector, start=2004, frequency=4)   # start in 2004 with quarterly frequency
+
+print(time_series)
+plot(time_series)
+```
+
+### Check if it's a _ts_
+
+`is.ts()` returns TRUE if an object is a _ts_ and FALSE if not.
+
+```{r}
+data("EuStockMarkets")
+
+is.ts(EuStockMarkets)
+
+start(EuStockMarkets)
+end(EuStockMarkets)
+frequency(EuStockMarkets)
+
+plot(EuStockMarkets)
+
+ts.plot(EuStockMarkets, col = 1:4, xlab = "Year", ylab = "Index Value", main = "Major European Stock Indices, 1991-1998")
+legend("topleft", colnames(EuStockMarkets), lty = 1, col = 1:4, bty = "n")
+```
+
+
+
+
+
+
