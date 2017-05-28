@@ -1,0 +1,157 @@
+---
+title: "Data Camp / xts - Chapter 5"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+Initialize and load the data
+
+```{r}
+library(xts)
+library(PerformanceAnalytics)
+load('data/ch4/data.RData')  # Using the "temps" dataset so just load the ch4 data to get it.
+```
+
+Chapter 5 of Data Camp xts class excersizes
+
+## Internals of xts
+
+### What is the _index_?
+
+Stores data as RAw seconds sicne 1970-01-01 UTC.
+
+_tClass_, _tZone_ and _indexFormat_ are classes used to manage these.
+
+Timezones are very important and should always be explicity set or the OS will set for you.  An example of this is that Amazon servers are all set to UTC time, not the time zone of the availability zone they are in.
+
+Setting the time zone can be done with the `Sys.setenv(TZ='EST')` command.
+
+For more inforamtion on R and timezones see `help(OlsonNames')` and, of course, the [wikipedia page on Coordinated Universal Time](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).
+
+
+#### Looking at the indexes
+
+```{r}
+index(temps[1:3])
+indexClass(temps)
+indexTZ(temps)
+indexFormat(temps) <- "%b-%d-%Y"
+head(temps)
+```
+
+### Why time zones are important
+
+xts provides functionality to allow multiple time zones accross various objects.  Many time operations expect the time zone be set and if not, will pick one for you (and sometimes not the one you want!).
+
+`tzone()` is provided by xts to get/set the time zone.
+
+#### R tidbit
+>> As I tried to create a list of 10 sequetial but random POSIX times I ran into an interesting problem.  My initial approach was to create a list of the current system time, then add a random value to it.  When I first tried it I used a (bad Mark for considering loops) for loop.  **Don't use loops in R**.  Anyway, I initialized a list with `c()`, then added the time to each field.  But it saved the values an the raw seconds since 1970 instead of the POSIXct type.  A quick search on Google found a solution of initizlizing the vector using `v = .POSIXct(character(10))`.  This will create a list of characters 10 elements long and then class them to POSIXct.  Should work, right?   Wrong.  I got the error message:
+```
+Error in unclass(e1) + unclass(e2) : 
+  non-numeric argument to binary operator
+```
+>> So, what is happening?  The underlying vector is a character vector.  The `+` operator "unclasses" the 2 arguments, see `unclass()` and then tries to add the results.  The result of unclassing the time vector was a string representation of the numeric value, which `+` could not deal with.  
+>> So I removed my head form the dark _imperative programming_ place it was and did it right.
+
+```{r}
+#Create a list of POSIX dates (based on ... now!)
+times = sort(rep(as.POSIXct(Sys.time()), 10) + runif(10, max=120))
+
+times_xts <- xts(1:10, order.by = times, tzone = 'America/Chicago')
+
+print(times_xts)
+
+tzone(times_xts) <- 'Asia/Hong_Kong'
+
+print(times_xts)
+
+tzone(times_xts)
+```
+
+### Periods, Periodicty and Timestamps
+
+#### periodicity()
+
+Tries to identify regularity of data, is it daily, weekly, monthly, etc.
+
+#### Counting periods
+
+Estimate number of periods, i.e. days, weeks, etc.  There are several functions for this,
+
+`nseconds()`, `nweeks()`, `nyears()`, etc.
+
+#### Breaking down index times.
+
+the .index* functions let us brak down the index into its POSIXlt like components.  These include
+
+`.indexmday()`, `.indexyday()`, etc.
+
+#### Modifying time stamps (indexs)
+
+`align.time()` will _align_ the times to some period provide.  i.e. n=60 will align by minute, n=3600 by hour, etc.
+
+`make.index.unique()` can be used to make the index ... um ... unique, if that wasn't obvious.  It will either _perturb_ duplicates or if drop=TRUE, drop them altogether.
+
+### Let's do some examples
+
+```{r}
+data(edhec)
+periodicity(temps)
+periodicity(edhec)
+
+edhec_yearly <- to.yearly(edhec)
+periodicity(edhec_yearly)
+```
+
+
+How many months, quarters and years are there in the edhec data?
+
+```{r}
+nmonths(edhec)
+nquarters(edhec)
+nyears(edhec)
+```
+
+Now let's look at the indexes in more excrutiating detail.
+
+```{r}
+.index(temps)
+.indexwday(temps)
+
+index <- which(.indexwday(temps) == 6 | .indexwday(temps) == 0)
+indexFormat(temps) <- "%a %d %b, %Y"
+
+temps[index]
+```
+
+
+If after merging some data you find duplciate indexes, you might want to make them unique.  The `make.index.unique()` function helps with this.  It can be used to either _perturb_ the dates, adding a small _epsilon_ (eps=) to the duplciated dates or can remove duplicates alltogther.
+
+Sometimes you have a situation where data can arrive at any point in some interval, say at any time in an hour, but you would prefer to reference those records by the hour.  The `align.time()` function will do this for you aligning based on the **n=** option.  i.e. if set _n=60_ it will align on the minute, if _n=3600_ the hour.
+
+```{r}
+z <- read.csv(header=FALSE, stringsAsFactors=FALSE, text="
+2017-05-28 21:31:15,-1.539950042
+2017-05-29 06:22:20,-0.928567035
+2017-05-29 06:22:20,-0.928567035
+2017-05-30 08:55:51,-0.294720447
+2017-05-31 13:44:53,-0.005767173
+2017-06-01 21:47:46,2.404653389
+2017-06-02 04:50:25,0.763593461
+2017-06-03 21:33:36,-0.799009249
+2017-06-03 21:33:36,-0.799009249
+2017-06-04 22:40:14,-1.147657009
+2017-06-05 15:51:28,-0.289461574
+2017-06-06 15:05:50,-0.299215118")
+
+z = xts(z[2], order.by=as.POSIXct(z[[1]]))
+names(z) <- NULL
+
+z_unique <- make.index.unique(z, eps=1e-4)
+head(z_unique)
+
+z_round <- align.time(z, n=3600)
+head(z_round)
+```

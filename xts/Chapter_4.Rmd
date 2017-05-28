@@ -1,0 +1,172 @@
+---
+title: "Data Camp / xts - Chapter 4"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(xts)
+library(PerformanceAnalytics)
+load('data/ch4/data.RData')
+```
+
+Chapter 4 of Data Camp xts class excersizes
+
+## Apply by time
+
+> period.apply(x, INDEX, FUN, ...)
+
+Works similar to R apply functions
+
+### Finding endpoints 
+
+The index of the last observation per interval
+
+> endpoints(x, on = 'years')
+
+* Intervals defined with the on argument and uses general times such as "days", "years", etc.
+
+Integer vector of endpoints, stars with 0 ends on index of last obs.
+
+Can use this to get INDEX values for `period.apply()` call.  There are "helper" versions such as apply.year(), etc.
+
+### split.xts()
+
+Split data into chunks of time.
+
+Uses standard xts period names like 'quarters', 'years', 'fortnights', etc.
+
+#### Example using endpoints
+
+```{r}
+AirPass <- as.xts(AirPassengers)
+indexFormat(AirPass) <- '%Y-%m-%d'
+
+endpoints(AirPass, on='years')
+
+endpoints(AirPass, on='months', k=2)
+```
+
+#### Using period.apply()
+
+```{r}
+ep <- endpoints(temps, on='weeks')
+
+period.apply(temps[, 'Temp.Mean'], INDEX=ep, mean)
+```
+
+#### Using split and lapply
+
+```{r}
+temps_weekly <- split(temps, f = "weeks")
+#temps_weekly
+
+lapply(X = temps_weekly, FUN = function(x) mean(x[,'Temp.Mean']))
+lapply(X = temps_weekly, FUN=mean)
+```
+
+Let's look at an alternate way to split the data.  First, we use `split()` and `apply()` to get the last days.  Then we use `endpoints()` and subsetting to get the same results.
+```{r}
+temps_1 <- do.call(rbind, lapply(split(temps, "weeks"), function(w) last(w, n = "1 day")))
+
+last_day_of_weeks <- endpoints(temps, on='weeks')
+temps_2 <- temps[last_day_of_weeks]
+
+print(temps_1)
+print(temps_2)
+
+```
+
+### Converting periodicity
+
+> to.period(x,
+            period='months',
+            k=1,
+            indexAt,
+            name=NULL,
+            OHLC=TRUE)
+
+* period controls the aggregation period
+* name sets root of new column names
+* indexAt allows for index alignment
+
+It works on univariat data or can be used to downsample an existing OHLC (OpenHighLowClose) object.
+
+indexAt changes the index point, i.e. first of month vs last (2016-01-01 vs 2016-01-31) but not the actual aggregation.  It lets you control whether you are referencing the data as "the upcomming period" or "the period ending".
+
+The result will have a new colum for each aggregated column for the Open, High, Low and Close (See how this was originally for market use?)
+
+### Lets try it!
+
+```{r}
+usd_eur_weekly <- to.period(usd_eur, period = "weeks")
+
+usd_eur_monthly <- to.period(usd_eur, period = "months")
+
+usd_eur_yearly <- to.period(usd_eur, period = "years", OHLC = FALSE)
+
+head(usd_eur)
+head(usd_eur_weekly)
+head(usd_eur_monthly)
+head(usd_eur_yearly)
+
+```
+
+### Downsampling data
+
+```{r}
+data(edhec)  # from the "PerformanceAnalytics" package
+
+eq_mkt = edhec[, 'Equity Market Neutral']
+
+str(eq_mkt)
+
+mkt_quarterly <- to.period(eq_mkt, period='quarters')
+
+mkt_quarterly2 <- to.quarterly(eq_mkt, name = 'edhec_equity', indexAt = 'firstof')
+
+head(mkt_quarterly)
+head(mkt_quarterly2)
+```
+
+### Rolling function
+
+**Discrete rolling** -> `split()` -> `lapply()` -? `rbind()`
+**Continuous rolling** -> `rollapply()`
+
+**Discrete rolling** applies cumulative summaries on fixed windows of data.  **Continuous rolling** applies cumulative summaries on windows of data that move forward, say by 1 observeration at a time.  That is, the first obs is dropped and a new one added to the end.  So the windows are fixed and _slide_ over the data like window into the data.
+
+#### Rolling Funcions
+`cumsum()`, `cumprod()`, `cummin()` and `cummax()`
+
+### Calculating cumulative sums by period
+
+```{r}
+# Split data into years
+edhec_years <- split(edhec , f = "years")
+str(edhec_years, list.len=2)
+
+# Apply the cumsum function to get cumulative summ for each years data.
+edhec_ytd <- lapply(edhec_years, FUN = cumsum)
+str(edhec_ytd, list.len=2)
+
+# merge them together into a contiguous object with each year showing cumultive sum for cols.
+edhec_xts <- do.call(rbind, edhec_ytd)
+head(edhec_xts, n=24)
+```
+
+### Calculate the rolling standard deviation of a time series
+
+Uses `rollapply()` from **zoo**.  This applies the cumulative function provided against a _sliding_ windows of data of the _width_ you specify.  The _width_ value is relatvie to the data interval, it is the actual number of observations so if it's daily data it refers to days, monthly data, months and so on.
+
+```{r}
+eq_sd <- rollapply(eq_mkt, width=3, FUN = sd)
+
+head(cbind(eq_mkt, eq_sd))
+
+```
+
+
