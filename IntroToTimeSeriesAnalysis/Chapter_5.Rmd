@@ -1,0 +1,113 @@
+---
+title: "Data Camp / Intro to Time Series Analysis - Chapter 5"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+
+```
+
+Chapter 5 of [Data Camp - Intro to Time Series Analsys](https://www.datacamp.com/courses/introduction-to-time-series-analysis)
+
+## Simple Moving Average Model
+
+_Today = Mean + noise + Slope * (Yesterday's Noise)_
+
+$Y_t = \mu + \epsilon_t + \Theta\epsilon_{t-1}$
+
+Where $\epsilon_t$ is mean 0 WN.
+
+3 parms:
+
+* $\mu$
+* Slope $\Theta$
+* WN Variance 
+
+If slope $\Theta$ is 0 then it's simply a WN model.  Otherwise $Y_t$ depends on both $\epsilon_t$ and $\epsilon_{t-1}$ and the process ${Y_t}$ is autocorrelated.
+
+Large values of $\Theta$ lead to greater autocorrelation.
+
+Netative values result in oscillatory ts.
+
+```{r}
+x <- arima.sim(model = list(ma=0.5), n = 100)
+
+y <- arima.sim(model=list(ma=0.9), n=100)
+
+z <- arima.sim(model=list(ma=(-0.5)), n=100)
+
+plot.ts(cbind(x, y, z))
+
+par(mfrow=c(3,1))
+acf(x)
+acf(y)
+acf(z)
+```
+
+### MA Model Esitmation and Forecasting
+
+Apply process to inflation from Ecdat package
+
+```{r}
+data(Mishkin, package='Ecdat')
+
+inflation <- as.ts(Mishkin[,1])
+inflation_changes <- diff(inflation)
+par(mfrow=c(2,1))
+ts.plot(inflation)
+ts.plot(inflation_changes)
+
+```
+
+```{r}
+par(mfrow=c(1,2))
+ts.plot(inflation_changes)
+acf(inflation_changes,lag.max=24)
+```
+
+The ACF shows a strong negative correlation at lag=1 and the remaining fluctuation near 0.
+
+**ARIMA(0, 0, 0)** is a "First order" MA model.
+
+```{r}
+MA_inflation_changes = arima(inflation_changes, order=c(0, 0, 1))
+print(MA_inflation_changes)
+```
+
+### Plot the fitted values
+
+```{r}
+ts.plot(inflation_changes)
+MA_inflation_changes_fitted = inflation_changes - residuals(MA_inflation_changes)
+points(MA_inflation_changes_fitted, type='l', col='red', lty=2)
+```
+
+### Use `predict()` to see the future!
+
+```{r}
+predict(MA_inflation_changes)
+
+predict(MA_inflation_changes, n.ahead = 6)
+```
+
+# fit to Nile data
+
+```{r}
+MA <- arima(Nile, order = c(0, 0, 1))
+print(MA)
+
+ts.plot(Nile)
+MA_fit <- Nile - resid(MA)
+points(MA_fit, type = "l", col = 2, lty = 2)
+```
+
+### MA and AR process
+
+MA and AR models are similar except that an MA model has autocorrelation at 1 lag and an AR model has autocorrelation at many lags.
+
+**I**nformation **C**riteria are a way to check the goodness of fit.  Generally, lower values are better.  There are 2 available `AIC()`  **Akaike Information Criterion** and `BIC()` **Bayesian Information Criterion**.
+

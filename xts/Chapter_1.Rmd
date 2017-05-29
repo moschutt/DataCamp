@@ -155,8 +155,8 @@ sun <- read.zoo(tmp, sep = ",", FUN = as.yearmon)
 # Convert sun into xts. Save this as sun_xts
 sun_xts = as.xts(sun)
 
-print(sunspots_xts)
-print(sun)
-print(sun_xts)
+head(sunspots_xts)
+head(sun)
+head(sun_xts)
 ```
 

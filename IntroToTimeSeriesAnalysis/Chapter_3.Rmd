@@ -1,0 +1,113 @@
+---
+title: "Data Camp / Intro to Time Series Analysis - Chapter 3"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+
+```
+
+Chapter 3 of [Data Camp - Intro to Time Series Analsys](https://www.datacamp.com/courses/introduction-to-time-series-analysis)
+
+## Scatterplots
+
+### Log returns
+
+apply `diff(log(stock_price))` to each stock, then bind them with `cbind()` and plot.
+
+_Log Returns_ or _continuously compounded returns_ are a commonly used value in financial time series analysis.  They are to log of gross returns.
+
+```{r}
+data("EuStockMarkets")
+
+plot(EuStockMarkets)
+
+# Use this code to convert prices to returns
+returns <- EuStockMarkets[-1,] / EuStockMarkets[-1860,] - 1
+
+# Convert returns to ts
+returns <- ts(returns, start = c(1991, 130), frequency = 260)
+
+# Plot returns
+plot(returns)
+
+# Use this code to convert prices to log returns
+logreturns <- diff(log(EuStockMarkets))
+
+# Plot logreturns
+plot(logreturns)
+```
+
+
+### Calculating column stats
+
+See the `colMeans()`, `colSum()`, etc or the dot versions, `.colMeans()` for calculating column or row statistics on a dataset.
+
+### Covariance
+
+`cov()` is used to calculate the _covariance_ between to datasets which are related over time.  Positive covariance implies a positive relationship.  _Covariance_ measures teh strength of the linear relationship between matched pairs of variables.
+
+_covariance_ are dependant on the size of the values. So it's hard to interpret the value.
+
+### Correlations
+
+* Standardized version of _covariance_ between -1 and 1.
+* +1 is perfect positive linear relationship
+* -1 is perfect negative linear relationship
+* - is no linear relationship
+
+`cor()` is used to calculate the _correlation_.  This is the _covariance_ divided by the product of the _sd_ of the 2 inputs.  e.g.  `cov(stock_a, stock_b) / (sd(stock_a) * sd(stock_b))`.
+
+`cor()` and `cov()` can be used on 2 time series or on a matrix with multiple colums to compare.
+
+```{r}
+DAX_logreturns <- ts(diff(log(EuStockMarkets[,'DAX'])), start=c(1991, 131), frequency=260)
+FTSE_logreturns <- ts(diff(log(EuStockMarkets[,'FTSE'])), start=c(1991, 131), frequency=260)
+
+cov(DAX_logreturns, FTSE_logreturns)
+
+# Use cov() with logreturns
+cov(logreturns)
+
+# Use cor() with DAX_logreturns and FTSE_logreturns
+cor(DAX_logreturns, FTSE_logreturns)
+
+# Use cor() with logreturns
+cor(logreturns)
+```
+
+### Autocorrelation
+
+A means to determine how a value relates to a previous value.
+
+Autocorelation at lag 1 is comparing current value to the previous, lag=2 todays prior.
+
+### The AutoCorrelation Function (ACF)
+
+The `acf()` function calculates the Autocorrelation for a series based on the indicated lag.  It will also plot the autocorrelation(s) if _plot=TRUE_ is set.  If no lag is specified, it will calculate 0 - 10.
+
+**NOTE:** acf calculates the correlation using 1/n, which is preferable for time series, wherase the `cor()` function uses 1/n-1.  This means that the `acf()` value is close but off by a factor of n-1/n.
+
+```{r}
+x = ts(arima.sim(model=list(order=c(0,0,0)), n=150),
+        start=1, frequency=1)
+
+x0 = x[-1]
+x1 = x[-150]
+
+head(cbind(x0, x1))
+
+plot(x0, x1)
+
+cor(x0, x1)
+
+acf(x, lag.max = 1, plot=FALSE)
+
+cor(x0, x1) * (149 / 150)
+```
+
+

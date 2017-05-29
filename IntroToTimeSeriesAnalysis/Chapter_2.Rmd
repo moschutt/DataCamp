@@ -1,0 +1,204 @@
+---
+title: "Data Camp / Intro to Time Series Analysis - Chapter 2"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+
+```
+
+Chapter 2 of [Data Camp - Intro to Time Series Analsys](https://www.datacamp.com/courses/introduction-to-time-series-analysis)
+
+### Trends: Variance
+
+#### log()
+
+* Can _linearize_ rapid growth
+* Can stabalize increasing variance
+
+**Only defined for positive values**
+
+#### diff()
+
+Can remove the linear trend
+
+With the _seasonal difference option_ can remove the seasonal component `diff(..., s)`
+
+```{r}
+rapid_growth = 500 + (seq(1, 40, length.out = 200) ^ 2) + (runif(200) * seq(1, 400, length.out=200))
+
+par(mfrow=c(2,1))
+
+ts.plot(rapid_growth)
+
+linear_growth = log(rapid_growth)
+
+ts.plot(linear_growth)
+```
+
+`diff()` takes the difference between each adjacent value.  The result is always _n -1_ records.  `diff()` can remove a time trend from a series. 
+
+Let's see what happens when we apply to the linear_growth data.
+
+```{r}
+
+diff_linear_growth = diff(linear_growth)
+par(mfrow=c(2,1))
+ts.plot(linear_growth)
+ts.plot(diff_linear_growth)
+```
+
+For data with seasonality the _lag=_ option can be applied to remove the seasonality.  Let's see what this can do.
+
+```{r}
+rapid_growth_with_seasonality = rapid_growth + sin(1:200) * 100
+
+par(mfrow=c(2, 1))
+# smooth it
+linear_growth_with_seasonality = log(rapid_growth_with_seasonality)
+linear_growth_with_seasonality_no_trend = diff(linear_growth_with_seasonality)
+ts.plot(rapid_growth_with_seasonality)
+ts.plot(linear_growth_with_seasonality)
+ts.plot(linear_growth_with_seasonality_no_trend)
+ts.plot(diff(linear_growth_with_seasonality_no_trend, lag=6))
+```
+
+### White Noise model
+
+Simple examle of a _stationary process_.
+
+The _white noise process_ has:
+
+* A fixed, constant mean
+* A fixed, constant variance
+* No correlation over time
+
+If any of these and possibly others, are true it is **NOT** _WN_
+
+* There is a trend in the data
+* There is periodocity in the data.
+* The variance is changing over time
+
+The `arima.sim()` function can simulate a _WN_ dataset.  `arima.sim(model=list(order=c(0,0,0)), n=50)`.
+#### ARIMA
+
+**A**uto**R**egressive **I**ntegrated **M**oving **A**verage
+
+The `arima()` function will display information about an _ARIMA_ dataset including the _mean_ (_intercept_), _variance_, _standard error_, etc.
+
+These values can also be obtained directly with the `mean()` and `var()` functions.
+
+```{r}
+wn1 = arima.sim(model = list(order=c(0,0,0)), n=50)
+wn2 = arima.sim(model = list(order=c(0,0,0)), n=50, mean=100, sd=10)
+
+par(mfrow=c(2,1))
+ts.plot(wn1)
+ts.plot(wn2)
+
+arima(wn1, order=c(0,0,0))
+mean(wn1)
+var(wn1)
+sqrt(var(wn1))
+arima(wn2, order=c(0,0,0))
+```
+
+### Random Walk Time Series
+
+* No specified mean or variance
+* Strong dependance over time
+* Change or ingrements are WN
+
+The _Random Walk Model_ is recursively defined as:
+
+_Today = Yesteray + Noise_
+
+$Y_t = Y_{t-1} + \epsilon_t$
+
+where $\epsilon_t$ is mean zero white noise (WN) and $\epsilon_t \longrightarrow \text{diff(Y)}$ is WN
+
+* Simulation requires and initial point $Y_0$
+* It has only 1 parm, the WN variance $\sigma_{\epsilon}^2$
+
+The `diff()` of a _Random Walk_ series is a _White Noise_ series.
+
+It can be defined to include a _drift_ variable represented by $c$
+
+$Y_t = c + Y_{t-1} + \epsilon_t$
+
+A _drift_ model has 2 parms, the WN variance $\sigma_{\epsilon}^2$ and the constant $c$.  Which is just a _Random Walk_ series with WN with mean $c$.
+
+The _Random Walk_ series is teh cumulative sum (or integration) of a mean zero WN series.  This is an **ARIMA(0, 1, 0)** model, where the middle 1 indicates the model's order of integration is 1.
+
+`arima.sim()` is used to create a _Random Walk_ series with _order=c(0,1,0)_.
+
+```{r}
+random_walk = arima.sim(model=list(order=c(0,1,0)), n=100)
+
+par(mfrow=c(1,2))
+
+ts.plot(random_walk)
+
+random_walk_diff = diff(random_walk)
+
+ts.plot(random_walk_diff)
+```
+
+#### Now with _drift_
+
+```{r}
+rwd = arima.sim(model=list(order=c(0,1,0)), n=100, mean=1)
+par(mfrow=c(1,2))
+
+ts.plot(rwd)
+
+rwdd = diff(rwd)
+ts.plot(rwdd)
+```
+
+
+```{r}
+model_wn <- arima(rwdd, order=c(0,0,0))
+int_wn = coef(model_wn)
+
+ts.plot(rwd)
+abline(0, int_wn)
+```
+
+### Stationarity
+
+* Stationary models are parsimonious
+* Have distributional stability over time
+
+
+Observed time series:
+
+* Fluctuate randomly
+* But behave similarly from one time period to the next
+
+**_See additional slides for more details_**
+
+```{r}
+# Use arima.sim() to generate WN data
+white_noise <- arima.sim(model=list(order=c(0,0,0)), n=100)
+
+# Use cumsum() to convert your WN data to RW
+random_walk <- cumsum(white_noise)
+  
+# Use arima.sim() to generate WN drift data
+wn_drift <- arima.sim(model=list(order=c(0,0,0)), n=100, mean=0.4)
+  
+# Use cumsum() to convert your WN drift data to RW
+rw_drift <- cumsum(wn_drift)
+
+# Plot all four data objects
+plot.ts(cbind(white_noise, random_walk, wn_drift, rw_drift))
+```
+
+
+
+
