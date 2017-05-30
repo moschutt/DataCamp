@@ -1,0 +1,163 @@
+---
+title: "Data Camp / ARIMA Modeling with R - Chapter 3"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(astsa)
+library(xts)
+```
+
+Chapter 3 of [Data Camp - ARIMA Modeling with R](https://www.datacamp.com/courses/arima-modeling-with-r)
+
+# ARIMA (Integrated ARMA models)
+
+```{r}
+x <- arima.sim(list(order=c(1,1,0), ar=0.9), n=200)
+
+par(mfrow=c(2,2))
+plot(x, main='ARIMA(1, 1, 0')
+plot(diff(x), main='ARIMA(1, 0, 0) (from diff)')
+plot(arima.sim(list(order=c(1,0,0), ar=0.9), n=200), 
+     main='ARIMA(1,0,0)')
+```
+
+
+## ACF and PACF for integrated models
+
+**ACF** decays in a liear fasion
+**PACF** is almost 1 at lag1
+
+```{r}
+acf2(x)
+```
+
+After differencing they look like for **ARMA** models.
+
+```{r}
+acf2(diff(x))
+```
+
+```{r}
+oil5 <- window(oil, end=c(2005, 52))
+par(mfcol=c(2,2))
+plot(oil5)
+plot(diff(oil5))
+acf(diff(oil5))
+pacf(diff(oil5))
+```
+
+The data appear to be MA so differencing is appropriate.  The differenced data appear to be stationary so an ARMA(1,0,1) is valid on the difference data or ARIMA(1,1,1) are appropriate models to try.
+
+```{r}
+arima(x, order=c(1,1,1)) -> a1
+arima(diff(x), order=c(1,0,1)) -> a2
+
+print(a1)
+print(a2)
+```
+
+## ARIMA - Plug and Play
+
+A time series is called **ARIMA(1,1,1)** if the _difference series_ of order _d_ is *ARMA(1, 0, 1)*
+
+## Messin' around with stuff
+
+```{r}
+x <= arima.sim(model=list(order=c(0,1,2), ma=c(1.2,0.7)), n=200)
+
+plot(x)
+acf2(x)
+plot(diff(x))
+acf2(diff(x))
+```
+
+## Excersize with Global Temp data
+
+### Just a reminder ...
+
+* Random Walk
+> This model assumes that in each period the variable takes a random step away from its
+previous value, and the steps are independently and identically distributed in size (“i.i.d.”). This
+is equivalent to saying that the first difference of the variable is a series to which the mean model
+should be applied.
+
+Using Average Global temps from 1880 - 2015.  This data appears to be Random Walk (see above for definition.)  So, Differencing this will remove trend and provide a stationary series.
+
+After taking the ACF of the differenced data there are 3 options for modesl:
+
+* ACF and PACF both trail off so ARIMA(1,1,1)
+* ACF cuts off at lag2 and PACF trails off so ARIMA(0,1,2)
+* ACF trails off and PACF cuts off at lag 3, so ARIMA(3,1,0)  [Not a good candidate because too complicated for such a simple datasets]
+
+**Note**:  The degree of the model is dependant on where the PACF cuts off, when it does.
+
+So, we model the first 2 with `sarima()`
+
+The residual analysis is a little better for the ARIMA(0,1,2) although the AIC and BIC are slighly larger for the ARIMA(1,1,1).  Either model is good, I would take the ARIMA(0,1,2) though, due to the residual analysis "looking" better to me.
+
+```{r}
+par(mfrow=c(2,1))
+plot(globtemp)
+plot(diff(globtemp))
+
+acf2(diff(globtemp))
+
+sarima(globtemp, 1, 1, 1)
+sarima(globtemp, 0, 1, 2)
+```
+
+### Shits and Giggles
+
+Just because I can, model against the ARIMA(3,1,0) just to see what happens.  In this case both the residual analysis AND the AIC/BIC are reasonably good.  **BUT** dont forget
+
+> AIC and BIC help you find the model with the smallest error using the least number of parameters. The idea is based on the _parsimony principle_, which is basic to all science and tells you to choose the simplest scientific explanation that fits the evidence.
+
+```{r}
+sarima(globtemp, 3, 1, 0)
+```
+
+## ARIMA Diagnostics
+
+Once you have a reasonable model you can add another parameter, if there isn't a change you're done, otherwise, keep going... Except don't overfit the model.
+
+### Example with oil prices
+
+Earilier we determiend that an ARIMA(1,1,1) fit well.  So, try adding a AR and MA value and see what happens.  Below are the fitted models for ARIMA(1,1,1), ARIMA(2,1,1) and ARIMA(1,1,2)
+
+What we find is that the new parameters significance (p-value) is high, so not significant and the other parameters are mostly unchangd.  So, adding these doesn't help.
+
+Generally, make sure that additional parameters are significant (have small p-values in ttable) and that adding parameters shows more than just a slight change in the remaining parameters.
+
+```{r}
+sarima(oil, 1, 1, 1) -> oil_fit
+oil_fit$ttable
+
+sarima(oil, 2, 1, 1) -> oil_fit
+oil_fit$ttable
+
+sarima(oil, 1, 1, 2) -> oil_fit
+oil_fit$ttable
+```
+
+## Forecasting ARIMA Process
+
+**astsa** has a function, `sarima.for()` which can be used to construct forecasts.
+
+Forecasting becomes "easy" once the model is determined, just keep applying it going forward in time! 
+
+Here is an example with the _oil_ dataset.  the **ARIMA(1,1,1)** was determined the best model earlier.
+
+```{r}
+oil5 <- window(oil, end=2006)
+oilf <- window(oil, end=2007)
+
+sarima.for(oil5, n.ahead=52, 1, 1, 1)
+lines(oilf, col='blue')
+```
+
+

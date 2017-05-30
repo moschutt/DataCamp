@@ -1,0 +1,203 @@
+---
+title: "Data Camp / ARIMA Modeling with R - Chapter 2"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(astsa)
+library(xts)
+```
+
+Chapter 2 of [Data Camp - ARIMA Modeling with R](https://www.datacamp.com/courses/arima-modeling-with-r)
+
+## AR and MA Models
+
+### How to identify the model?
+
+
+```{r}
+x = arima.sim(model=list(order=c(1, 0, 0), ar=(-0.7)), n=200)
+y = arima.sim(model=list(order=c(0, 0, 1), ma=(-0.7)), n=200)
+
+par(mfrow=c(1,2))
+plot(x)
+plot(y)
+
+acf(x)
+pacf(x)
+
+acf(y)
+pacf(y)
+```
+
+Above are 2 models, AR and MA with similar patters.  Looking it's not clear which is which.  Should use the `acf()` and `pacf()` functions.  More conveniently, since they are often printed together, use the `acf2()` which prints, wait for it, ... both.
+
+ | AR(p) | MA(q) | ARMA(p,q)
+---- | ---- | ---- | ----
+ACF | Tails off | Cuts off lag q | Tails off
+PACF | Cuts off lag p | Tails of | Tails off
+
+It is **NOT** possible for both **ACF** and **PACF** to tail off.
+
+### Estimating
+
+Similar to Regression using least squares.  Unfortunately this is more difficult than with Regression and not as clear.  Estimates are obtained numerically using ideas of Guass and Newton.
+
+The **astsa** package has a front end to the `arima()` function `sarima()`, which can be used.  It makes the interface a bit simpler and does some nice after the fact optimizations.
+
+Here's an example using a created **AR(2)** model with mean 50.
+
+$X_t = 50 + 1.5(X_{t-1} - 50) _ (-0.75)(X_{t-2} - 50) + W_t$
+
+Note (at the end of the _ttable_ output) that the estimated parameters are close to the actuals from our model.
+
+```{r}
+x <- arima.sim(list(order=c(2, 0, 0), ar=c(1.5, (-0.75))), n=200) + 50
+x_fit <- sarima(x, p=2, d=0, q=0)
+x_fit$ttable
+```
+
+Now do an *MA(1)*.
+
+$X_t = W_t + (-0.7) W_{t-1}$
+
+
+```{r}
+y <- arima.sim(list(order=c(0,0,1), ma=(-0.7)), n=200)
+y_fit <- sarima(y, p=0, d=0, q=1)
+y_fit$ttable
+```
+
+### YAE
+
+```{r}
+x <- arima.sim(model = list(order = c(1, 0, 0), ar = .9), n = 100) 
+
+plot(x)
+
+acf2(x)
+
+x_fit <- sarima(x, p=1, d=0, q=0)
+x_fit$ttable
+```
+
+### AR and MA together
+
+This is the _awesome_  **ARMA** model.
+
+$X_t = \phi X_{t-1} + W_t + \theta W_{t-1}$
+
+Where $\phi X_{t-1}$ comes from the AR model $X_t = \phi X+{t-1} + W_t + \epsilon_t$ and $\epsilon_t$ is replaced with MA model results $\theta W_{t=1}$.
+
+As noted above, the **ACF** and **PACF** both will trail off when the model is **ARMA**.
+
+This is "_natural_" for ts because ts are _typically_ corrolated.
+
+Such a model can be generated with _order=c(1, 0, 1)_
+
+Here's an example **ARMA(1, 1)**
+
+```{r}
+x <- arima.sim(list(order=c(1, 0, 1), ar=.9, ma=(-0.4)), n=200)
+acf2(x)
+plot(x, main='ARMA(1,1)')
+```
+
+### Esimating
+
+It's not possible to determine the order of the model.  The best thing to do is small, i.e. **ARMA(1,1)** and move up from there.
+
+`sarima()` can be used to estimate the model as with **MA** and **AR** models.
+
+### Model Choice
+
+2 best choices are **AIC** and **BIC**.
+
+In general, the more parameters added to a model the lower the error gets, regardless of whether the parameters add to the model or not.  **AIC** and **BIC** address this by adding a penalty for more parameters.  **AIC** uses k=2 vs **BIC** k=log(n) but both typically agree.  Lower values are better.
+
+So, fit multiple models, check the **AIC** and **BIC** <strike>and then pick the model that supports your hypothesis</strike>  (Sorry, no conservatives allowed) pick the model with the lowest **I**nformation **C**riterion values.
+
+Here's an example calculating the _growth rate_ of the GNP.  (_growth rate_ can be calcuated by differencing the log of the data)
+
+```{r}
+gnpgr <- diff(log(gnp))
+
+sarima(gnpgr, 1, 0, 0)
+
+sarima(gnpgr, 0, 0, 2)
+```
+
+For the first model we get
+
+> $AIC
+[1] -8.294403
+
+> $AICc
+[1] -8.284898
+
+> $BIC
+[1] -9.263748
+
+and for the second
+
+> $AIC
+[1] -8.297695
+
+> $AICc
+[1] -8.287855
+
+> $BIC
+[1] -9.251712
+
+The **BIC** preferred the **AR(1)** model and the **AIC** prefered the **MA(2)**.  Since the **AR(1)** is the simpler model, this would be the preferred model to choose.  **Alway go for the simpler model if the IC's don't agree but are close**
+
+## Residual Analysis
+
+We want to makes sure the residuals are _white gausian noise_.  The `sarima()` function reutrns 4 plots:
+
+* *Standardized residuals* - look for patterns, if so, go back to mdoel
+* *Sample ACF of resisduals* - Look that at least 95% of values fall between the "blue lines"
+* *Q-Q plot* - Thies checks for "normality" of the residuals (The _Gausian_ part).  There are usually departures from the line at the ends, as long as they are not extreme, it's OK.
+* *Q-statistic p-values* - As long as most of the points are above the blue line, it's OK, otherwise go back to the model.
+
+### Example
+
+```{r}
+dl_varve <- diff(log(varve))
+
+m1 <- sarima(dl_varve, 0, 0, 1)
+
+m2 <- sarima(dl_varve, 0, 0, 2)
+
+m3 <- sarima(dl_varve, 1, 0, 1)
+
+m1$AIC
+m1$BIC
+
+m2$AIC
+m2$BIC
+
+m3$AIC
+m3$BIC
+```
+
+> AIC and BIC help you find the model with the smallest error using the least number of parameters. The idea is based on the _parsimony principle_, which is basic to all science and tells you to choose the simplest scientific explanation that fits the evidence.
+
+### Reitterating what to look for in residuals charts
+
+1. The standardized residuals should behave as a white noise sequence with mean zero and variance one. Examime the residual plot for departures from this behavior.
+2. The sample ACF of the residuals should look like that of white noise. Examine the ACF for departures from this behavior.
+2. Normality is an essential assumption when fitting ARMA models. Examine the Q-Q plot for departures from normality and to identify outliers.
+4. Use the Q-statistic plot to help test for departures from whiteness of the residuals.
+
+```{r}
+
+oil_returns = diff(log(oil))
+plot(oil_returns)
+acf2(oil_returns)
+sarima(oil_returns, 1, 0, 1)
+```

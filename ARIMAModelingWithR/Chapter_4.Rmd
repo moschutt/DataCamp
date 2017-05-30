@@ -1,0 +1,212 @@
+---
+title: "Data Camp / ARIMA Modeling with R - Chapter 4"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(astsa)
+library(xts)
+```
+
+Chapter 4 of [Data Camp - ARIMA Modeling with R](https://www.datacamp.com/courses/arima-modeling-with-r)
+
+## Seasonal ARIMA models
+
+The letter s denotes the seasonal period.  i.e. 4 quarters, 12 months, 1.203849928849390 nano-seconds.
+
+### Pure Seasonal Models
+
+consider pure seasonal models such as an $SAR(P=1)_{1=12}$ model.  This would be something like monthly temperatures where the temperature for the current period is dependant on the one from 12 months prior + some noise.
+
+$X_t = \phi X_{t-12} + W_t$
+
+### ACF and PACF of Pure Seasonal Models
+
+ACF and PACF behave as they do with the non-seasonal but only at the seasonal points, i.e. for S=4, 0, 4, 8, 12, ... or for s=12, 0, 12, 24, ...
+
+| $SAR(P)_s$ | $SMA(Q)_s$ | $SARMA(P,Q)_s$
+----|----|----|----
+ACF* | Tails off | Cuts off lag QS | Tails off
+PACF* | Cuts off lag PS|Tails off| Tails off
+
+* The values at the nonseasonal lags are 0
+
+### Mixed Seasonal Model
+
+These are called: $\text{SARIMA}(p,d,q) x (P,D,Q)_s$ models.
+
+The **p,d,q** are the orders of the non-seasonal part of the model and the upper case letters the seasonal part.
+
+Consider $SARIMA(0,0,1)x(1,0,0)_12$ - $X_t = \phi X_{t-12} + W_t + \theta W_{t-1}$
+
+This model says this months value is dependant on 
+
+* **SAR(1)**: The value from 12 periods ago $X_{t-12}$
+* **MA(1)**: The _shock_ (error) from the previos period.  $W_{t-1}$
+
+## Determining what type of Mixed Model.
+
+Looking at the P/ACF
+
+1. Focus first on the seasonal part (lags 12, 24, ...) to see what the P/ACF values are doing to determine the model(s) to try.
+2. Then focus on the non-seasonal part (lags 1, 2, 3, ...) to determine the best model to choose.
+
+## Analysis of AirPassengers
+
+* Data has trend and non-linear growth, that is the variance is increasing..
+* log the data, which removes the non-linear growth and controls the values
+* diff the data to remove the trend.
+
+Note that there is what appears to be seasonality every 12 periods (months), this can be removed with a call to `diff(d, lag=12)` which will diff the data with lag=12.
+
+* diff the data with lag=12 to remove the 12 period seasonality.
+
+```{r}
+par(mfrow=c(2,2))
+plot(AirPassengers)
+plot(log(AirPassengers))
+plot(diff(log(AirPassengers)))
+plot(diff(diff(log(AirPassengers)),12))
+```
+
+At thsi point we have d=1, D=1 and S=12.
+
+Apply P/ACF the diffed data.  max.lag=48 for 48 periods (4 years)
+
+ACF appears to cut off at s = 12 adn PACF appears to be trailing off which suggests a SMA, so P=0 and Q=1.
+
+ACF and PACF appear to be trailing off which implies an arma so p=1 q=1
+
+So we conclude an SARIMA(1,1,1)(0,1,1) on the log data.  However, the sarima shows no significance for the ar1 component, so we adjust the model to SARIMA(0,1,1)(0,1,1)
+
+```{r}
+acf2(diff(diff(log(AirPassengers)),12), max.lag = 48)
+```
+
+```{r}
+
+fit = sarima(log(AirPassengers), 1, 1, 1, 0, 1, 1, 12)
+fit$ttable
+
+fit1 = sarima(log(AirPassengers), 0, 1, 1, 0, 1, 1, 12)
+fit1$ttable
+```
+
+## Let's do it again with seasonal unemployment
+
+Data appears to have a trend.  Difference the data to remove the trend.
+
+Data appears to have seasonality.  Difference again with lag=12 (we could look closely to see this and it's there.)
+
+Finally, no trend or seasonality, just WN.
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(unemp)
+du <- diff(unemp)
+plot(du)
+ddu <- diff(du, lag=12)
+plot(ddu)
+
+```
+
+## P/ACF the ddu data
+
+Set lag to 60 for 5 years.
+
+ACF at seasonal intervals drops off and PACF tails off, so SMA(1)
+
+ACF at regular intervals tails off at lag=2 and seaonsl drops off at lag=2, so MA(2)
+
+We now have SARIMA(0, 1, 1)(1, 1, 0) S=12
+
+```{r}
+acf2(ddu, max.lag=60)
+```
+
+And **_BAM!_** well fitting model!  Me know something!
+
+```{r}
+fit = sarima(unemp, 2, 1, 0, 0, 1, 1, 12)
+fit$ttable
+```
+
+```{r}
+par(mfrow=c(2,2))
+
+plot(chicken)
+plot(diff(chicken))
+plot(diff(diff(chicken), 12))
+
+```
+
+There is seasonal persistence, the fact that the ACF values at seasonal intervals persists.  So, you need to 
+difference it again.
+
+```{r}
+acf2(diff(chicken), max.lag=60)
+```
+
+```{r}
+acf2(diff(diff(chicken), 12), max.lag=60)
+```
+
+## Births
+
+```{r}
+par(mfrow=c(2,1))
+plot(birth)
+db = diff(birth)
+plot(db)
+```
+
+```{r}
+acf2(db, max.lag = 60)
+```
+
+There is seasonal persistence, lines not going away at seasonal lags, so difference again but with lag=12.
+
+```{r}
+ddb = diff(db, lag=12)
+acf2(ddb, max.lag=60)
+```
+
+Seasonal ACF drops and PACF trails off at seasonal lag 1, so SMA(1).
+
+ACF drops at lag=1 and PACF trails off at lag=1.
+
+Had to diff 2 x so model is 0, 1, 1, 0, 1, 1, 12?
+
+```{r}
+sarima(birth, 0, 1, 1, 0, 1, 1, 12)
+```
+
+Residual analysis isn't ideal.  Perhaps the drop in ACF was a trail off, try adding an AR
+
+```{r}
+sarima(birth, 1, 1, 1, 0, 1, 1, 12)
+```
+
+AR coefficient is significant and residuals are looking better.
+
+## Forecasting.
+
+Like with simpla ARIMA forecasting is simple.  **astsa** includes an `sarima.for()` function for forecasting seasona arimas.
+
+Let's use the unemployment example from previously.  This was modeled as **SARIMA(2, 1, 0, 0, 1, 1, 12)**
+
+```{r}
+sarima.for(unemp, 2, 1, 0, 0, 1, 1, 12, n.ahead=36)
+```
+
+And the chicken data, which was modeled to **SARIMA(2, 1, 0, 1, 0, 0, 12)**
+
+```{r}
+sarima.for(chicken, 2, 1, 0, 1, 0, 0, 12, n.ahead=60)
+```
