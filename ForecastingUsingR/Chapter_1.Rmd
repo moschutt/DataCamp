@@ -1,0 +1,111 @@
+---
+title: "Data Camp / Forecasting Using R - Chapter 1"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(ggplot2)
+library(forecast)
+library(fpp)
+```
+
+Chapter 1 of [Data Camp - Forecasting Using R](https://www.datacamp.com/courses/forecasting-using-r)
+
+See functions:
+
+* `autoplot()` {ggpolot2 package} - for plotting data, generally in data.frame or vector.  (An undocumented * parameter facets=TRUE/FALSE will facet results instead of plot all on same chart.)
+* `ggseasonplot()` {forecast package} - Plot data using ggplot2
+* `ggsubseriesplot()` {forecast package} - Plot sub-series data.
+
+### Trends, seasonality and cyclicity
+
+Table of trend/sesonality/cyclicity
+
+Pattern | Description
+------- | ------------------------------------------------------------
+Trend | A pattern exists involving a long-term increase OR descrease in the data.
+Seasonal | A periodic pattern exists due to the calendar (e.g. quarter, month, or day of week)
+Cyclic | A pattern exists wher the data exhibits rises and falls that are _not of fixed period_ (duration usually of at least 2 years)
+
+
+### Seasonal is always the same time period.
+
+### Cyclic is not always of the same time perid.
+
+## Seasonal or Cyclic?
+
+Differences are important because of models applied to each are differnet.
+
+Differences in patterns:
+
+* Seasonal pattern constant length vs. cyclic pattern variable length
+* Average length of cycle longer than length of seasonal pattern
+* Magnitude of cycle more variable than magnitude of seasonal pattern
+
+The variability of Cyclic data makes it more difficult to forecast than seasonal data.
+
+When you plot two ts points like $y_t$ against $y_{t-1}$ you have a lag plot.  These result in an "Autocorrelation Function" or **ACF**.
+
+**ggplot2** provides functions to plot both the lag and the ACF.
+
+* `gglagplot()`
+* `ggAcF()`
+
+```{r}
+data(oil)
+
+autoplot(oil)
+
+gglagplot(oil, set.lags=1:9)
+
+ggAcf(oil, lag.max=09)
+```
+
+
+```{r}
+autoplot(sunspot.year)
+ggAcf(sunspot.year)
+
+```
+
+## Identifying data from ACF.
+
+There tend to be spikes in the ACF data at lags which correspond to Cyclical peaks.  If there are such peaks in the ACF chart see which data has similar periods between peaks.
+
+## White Noise
+
+Also i.i.d.
+
+ACF of "White Noise"  is many varying small peaks.
+
+The blue lines of the `ggAcf()` function indicate the minimum value for an ACF value to be "significant"  Anything below can be ignored, anything above may be of interest and value in modeling.  See the pigs dataset, the plot look pretty much like "white noise", but the ACF shows something of interest at lag 1 - 3.
+
+```{r}
+data(pigs)
+
+pigs2 = window(pigs, start=1990)
+autoplot(pigs2)
+ggAcf(pigs2)
+
+```
+
+
+## Ljung-Box test
+
+The Lhung-Box test will look at the first _h_ autocorrelation values **together**.  Signficant tests (small p-value) indicates the data are probably **not** white noise.
+
+```{r}
+Box.test(pigs, lag=24, fitdf=0, type='Lj')
+autoplot(pigs)
+```
+
+```{r}
+
+```
+
+
+

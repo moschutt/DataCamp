@@ -1,0 +1,104 @@
+---
+title: "Data Camp / Forecasting Using R - Chapter 2"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(ggplot2)
+library(forecast)
+library(fpp)
+```
+
+Chapter 2 of [Data Camp - Forecasting Using R](https://www.datacamp.com/courses/forecasting-using-r)
+
+## Forecast intervals
+
+The **forecast** is the mean of multiple possible futures based on the history.  This is often called the "point forecast".
+
+The default R forecasting functions produce the **forecast** + shaded areas representing the 80% and 95% regions.  The model is interpreted such that the expectation is that 1/2 of future points will fall above the **forecast** line and 1/2 below  and 80% within the 80% region and 20% outside of it, etc.
+
+The most simple model is the **naiive** model, which is implemented in R with the `naive()` function and simply uses the last known point as the forecast moving forward.
+
+To include a _seasonal_ component the `snaive()` function provides the ability to use the point from some previous period, i.e. use last March's value to predict this Marches value.
+
+```{r}
+fcbeer = naive(ausbeer, h=20)
+autoplot(fcbeer)
+
+fcbeers = snaive(ausbeer, h=20)
+autoplot(fcbeers)
+```
+
+## Fitted values and residuals
+
+A _fitted value_ is the forecast of an observation using all previous observations.
+
+A _residual_ is the difference between the forecasted value and the actual observation.
+
+## Residuals should look like white noise
+
+### Essential assumptions about _residuals_
+
+* They should be uncorrelated.  If there is some correlation then the model can be refined.
+* They should have 0 mean.  Otherwise the forecast has **bias**, the forecast can be adjusted until there is 0 mean.
+
+Not essential but important
+
+* They should have constant variance
+* They should be normally distributed
+
+When forecasting you should split data into a **training** and **test** set to avoid **overfitting** a model.
+
+The difference between the actual values from the **test** set and the model results are called **forecast errors** vs. **residuals**.
+
+## Measures of forecast accuracy
+
+Definitions:
+$y_t$ = Observation  
+$\hat{y_t}$ = Forecast  
+$e_t = y_t - \hat{y_t}$ = Forecast error
+
+There are several measures of accuracy
+
+
+Accuracy measure | Calculation
+---- | ----------------------------------------------------------------
+Mean Absolute Error |  $MAE = E(|e_t|)$
+Mean Squared Error | $MSE = E(e_t^2)$
+Mean Absolute Percentatage Error | $MAPE = 100 \times E(|\frac{e_t}{y_t}|)$
+Mean Absolute Scaled Error | $MASE = MAE / Q$  (Where $Q$ is a scaling constant)
+
+$E()$ is the **E**xpected value or _Average_ and is defiend as $E(x) = \frac{1}{N} \sum_{n=1}^N{x_n}$
+
+In all cases a _small_ value is better.
+
+In R the `accuracy()` fn will do most of the heavy lifting in testing accuracy of a model.
+
+```{r}
+train <- window(gold, end = 1000)
+m1 = naive(train)
+m2 = snaive(train)
+m3 = meanf(train)
+
+accuracy(m1, gold)
+accuracy(m2, gold)
+accuracy(m3, gold)
+```
+
+It looks like the **snaive** model is best.
+
+## Time series cross-validation
+
+This method sets up several training and test sets.  In a 1 step model, a subset of the data is used as the training and the next point the test, everything else is not used.  Then the training set is increased by 1 point as well as the test set and repeat until you reach the end of the data.
+
+You can then estimate the error by averaging the error over all the _tiny_ test sets.
+
+The R function `tsCV()` will do this for you.
+
+* Choose the model with smallest MSE.
+
+
