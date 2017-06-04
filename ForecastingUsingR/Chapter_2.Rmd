@@ -3,6 +3,7 @@ title: "Data Camp / Forecasting Using R - Chapter 2"
 output:
   pdf_document: default
   html_notebook: default
+  html_document: default
 ---
 
 Initialize and load the data
@@ -66,11 +67,11 @@ There are several measures of accuracy
 
 
 Accuracy measure | Calculation
----- | ----------------------------------------------------------------
-Mean Absolute Error |  $MAE = E(|e_t|)$
+---------------------------------- | ----------------------------------------------------------------
+Mean Absolute Error |  $MAE = E(\bracevert e_t \bracevert)$
 Mean Squared Error | $MSE = E(e_t^2)$
-Mean Absolute Percentatage Error | $MAPE = 100 \times E(|\frac{e_t}{y_t}|)$
-Mean Absolute Scaled Error | $MASE = MAE / Q$  (Where $Q$ is a scaling constant)
+Mean Absolute Percentatage Error | $MAPE = 100 \times E(\bracevert\frac{e_t}{y_t}\bracevert)$
+Mean Absolute Scaled Error | $ MASE = MAE / Q$  (Where $Q$ is a scaling constant)
 
 $E()$ is the **E**xpected value or _Average_ and is defiend as $E(x) = \frac{1}{N} \sum_{n=1}^N{x_n}$
 

@@ -1,0 +1,288 @@
+---
+title: "Data Camp / Forecasting Using R - Chapter 4"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+---
+
+Initialize and load the data
+
+```{r}
+library(ggplot2)
+library(forecast)
+library(fpp)
+```
+
+Chapter 4 of [Data Camp - Forecasting Using R](https://www.datacamp.com/courses/forecasting-using-r)
+
+## Variance Stabilization
+
+### Transformations for variance stabilization
+
+* If the data show increasing variation as the level of the series increases, then a **transformation** can be useful.
+
+Some common transformations are:
+
+What | Formula | When
+------------- | -----------------------------  | ---------------
+Square Root   | $w_t = \sqrt{y_t}$ | $\downarrow$
+Cube Root | $w_t = \sqrt[3]{y_t}$ | Increasing
+Log | $w_t = \log(y_t)$ | strength
+Inverse | $w_t = \frac{-1}{y_t}$ | $\uparrow$
+
+```{r}
+autoplot(usmelec) + 
+  xlab("Year") +
+  ylab("") +
+  ggtitle("Electricity use")
+
+autoplot(sqrt(usmelec)) +
+  xlab("Year") +
+  ylab("") +
+  ggtitle("Square Root Electricity use")
+
+autoplot(usmelec^0.3333333) +
+  xlab("Year") +
+  ylab("") +
+  ggtitle("Cube Root Electricity use")
+
+autoplot(log(usmelec)) +
+  xlab("Year") +
+  ylab("") +
+  ggtitle("Log Electricity use")
+
+autoplot((-1)/usmelec) +
+  xlab("Year") +
+  ylab("") +
+  ggtitle("Inverse Electricity use")
+```
+
+## Box - Cox transformations
+
+These are close to the previously described.  The formula is
+
+$w_t = \begin{cases}log(y_t) \\ \frac{y_t^{\lambda}}{\lambda} \end{cases}$ $\begin{eqnarray} \lambda = 0 \\ \lambda \neq 0 \end{eqnarray}$
+
+
+* $\lambda = 1$ : No substanative transformation
+* $\lambda = \frac{1}{2}$ : Square root plus linear transformation
+* $\lambda = \frac{1}{3}$ : Cube root + linear transformation
+* $\lambda = 0$ : Natural logarithm transformation
+* $\lambda = -1$ : Inverse transformation
+
+You can try different values for $\lambda$ or use the `BoxCox.lambda()` to get the approximate best value.
+
+```{r}
+BoxCox.lambda(usmelec)
+```
+
+Once chosen simply add to modeling function.
+
+```{r}
+usmelec %>%
+  ets(lambda=(-0.477)) %>%
+  forecast(h = 60) %>%
+  autoplot()
+```
+
+For **ETS** models you don't **NEED** to figure out the $\lambda$ but for **ARIMA** you will.
+
+Here is an example where the sesonal data was **diff**ed out and then the it was smoothed by a second `diff()` call to get the non-seasonal variation out.
+
+```{r}
+autoplot(h02)
+
+difflogh02 <- diff(log(h02), lag = 12)
+
+autoplot(difflogh02)
+
+ddifflogh02 <- diff(difflogh02)
+autoplot(ddifflogh02)
+
+ggAcf(ddifflogh02)
+```
+
+
+
+## ARIMA models
+
+**A**uto**R**egressive **I**ntegrated **M**oving **A**verage
+
+### AR Models
+
+$y_t = c + \phi_1 y_{t-1} + \phi_2 y_{t-2} + ... + \phi_p y_{t-p} + e_t, e_t \sim \text{white noise}$
+
+Multiple regression with _lagged observations_ as predictors
+
+### MA Models
+
+$y_t = c + e_t + \theta_1 e_{t-1} + \theta_2 e_{t-2} + ... + \theta_q e_{t-q}, e_t \sim \text{white noise}$
+
+Multiple regression with _lagged errors_ as predictors.
+
+### ARMA Models
+
+$y_t = c + \phi_1 y_{t-1} + ... + \phi_p y_{t-p} + \theta_1 e_{t-1} + ... + \theta_q e_{t-q} + e_t$
+
+Multipel regression with _lagged observations_ **and** _lagged errors_ as predictors
+
+### ARIMA(p, d, q) Models
+
+Combine ARMA model with d - lots of _differencing_.
+
+To apply an ARIMA you need to decide on a p, d, q and whether to include the constant c.
+
+```{r}
+autoplot(usnetelec) +
+  xlab("Year") +
+  ylab("billion kwh") +
+  ggtitle("US net electricity generation")
+```
+
+Use the `auto.arima()` function to fit the ARIMA model.
+
+Below we can see it selected **ARIMA(2, 1, 2) with drift**
+
+* 2 past observations
+* differenced once
+* 2 past errors 
+
+**drift** is the term used for the coefficient c on differenced data.
+
+```{r}
+fit = auto.arima(usnetelec)
+summary(fit)
+```
+
+Like the `ets()` function `auto.arima()` minimized on the AICc value. 
+
+**HOWEVER** you can compare the AICc value between an `ets()` and `auto.arima()` model.  You can only compare within the same model class.
+
+**ALSO** you can't compare AICc values between models with different amounts of differencing.
+
+```{r}
+fit %>% forecast() %>% autoplot()
+```
+
+`auto.arima()` uses the Hyndman-Khandakar algorithm
+
+* Select number of differences _d_ via _unit root tests_
+* Select _p_ and _q_ by minimizing _AICc_
+* Estimate parameters using _maximum likelihood estimation_
+* Because of the model space size, a stepwise search is used to traverse model space to save time.
+
+```{r}
+austa %>% Arima(order = c(0,1,1), include.constant = FALSE) %>% forecast() %>% autoplot()
+
+austa %>% Arima(order=c(2,1,3), include.constant=TRUE) %>% forecast() %>% autoplot()
+
+austa %>% Arima(order=c(0,0,1), include.constant=TRUE) %>% forecast() %>% autoplot()
+
+austa %>% Arima(order=c(0,2,1), include.constant=FALSE) %>% forecast() %>% autoplot()
+```
+
+### Comparing different model classes
+
+Because **AICc** can not be compared between models of differnet classes (or of the same class with different levels of differencing) we need to use a differnt method.  Cross validation works for this `tsCV()`.
+
+Loser MSE is better.
+
+```{r}
+fets <- function(x, h) {
+  forecast(ets(x), h = h)
+}
+farima <- function(x, h) {
+  forecast(auto.arima(x), h = h)
+}
+
+e1 <- tsCV(austa, fets, h=1)
+
+e2 <- tsCV(austa, farima, h=1)
+
+mean(e1^2, na.rm=TRUE)
+mean(e2^2, na.rm=TRUE)
+
+```
+
+## Seasonal ARIMA models
+
+Add Seasonal values (P, D, Q)m
+
+* P = seasonal AR lags
+* D = Number of seasonal differences
+* Q = Number of seasonal MA lags
+* m = seasonal period
+
+The resulting equasions are quite complicated and no longer linear as the seasonal and non-seasonal components are multiplied together.
+
+```{r}
+autoplot(debitcards) +
+  xlab("Year") +
+  ylab("million ISK") +
+  ggtitle("Retail debit car usage in Iceland")
+```
+
+Because there is varying seasonality over time, the data needs to be **transformed**, setting _lambda=0_ will apply the equivolent of a _log()_ to the data.
+
+```{r}
+auto.arima(debitcards, lambda=0) -> fit
+fit
+```
+
+**ARIMA(0,1,1)(1,0,0)[12]**
+
+* 1 difference
+* 1 MA lag
+* 1 seasonal AR lag
+* seasonality is 12
+
+```{r}
+fit %>%
+  forecast(h=36) %>%
+  autoplot() + 
+  xlab("Year")
+```
+
+The ARIMA models are more sensitive to the seasonal component at the end of the series than at at the beginning.
+
+**NOTE**:  There is trending in the forecast but no drift constant.  This is because, if you difference a series more that once, you will automatically get trend.  This was differenced at the seasonal and non-seasonal level, so twice.
+
+### General process
+
+```{r}
+h02 %>% log() %>% autoplot()
+
+fit <- auto.arima(h02, lambda=0)
+
+summary(fit)
+```
+
+Because `auto.arima()` takes short cuts to be as fast as possible, it doesn't always find the model with the absolute minimum AICc.  However, at the expense of performance you can disable the stepwise review to get the model with lowest AICc.
+
+Here's an example
+
+```{r}
+auto.arima(euretail)
+
+auto.arima(euretail, stepwise=FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

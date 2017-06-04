@@ -1,0 +1,260 @@
+---
+title: "Data Camp / Forecasting Using R - Chapter 3"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+---
+
+Initialize and load the data
+
+```{r}
+library(ggplot2)
+library(forecast)
+library(fpp)
+```
+
+Chapter 3 of [Data Camp - Forecasting Using R](https://www.datacamp.com/courses/forecasting-using-r)
+
+## Exponential Forecast
+
+### Simple Exponential smoothing
+
+In R uses the `ses()` function.  The parameters (noted below) are estimated using least squares estimation.
+
+**Forecasting Notation:**
+
+$\hat{y}_{t+h|t}=$ point forecast of $y_{t+h}$ given data $y_1, ..., y_t$
+
+**Forecast Equation:**
+
+$\hat{y}_{t+h|t} = \alpha y_t + \alpha(1 - \alpha) y_{t-1} + \alpha(1 - \alpha)^2 y_{t-2} + ...$ Where $0 \leq \alpha \leq 1$
+
+$\alpha$ determines how much weight is applied to more recent observations and how quickly they trail away.  Larger values means that more weight on recent observation(s) and decay more slowly.
+
+This can be (more conveniently) represented as:
+
+Forecast equation:   $\hat{y}_{t+h|t} = \ell_t$
+
+Smoothing equation:  $\ell_t = \alpha y_t + (1-\alpha)\ell_{t-1}$
+
+* $\ell_t$ is the **level** (smoothed value) of the series at time t.
+
+The forecast is the most recent estimate of the $\ell$ **(level)**.
+
+$\ell$ _evolves_ over time based on the most recent observation and the previous estimate of the level.
+
+There are 2 components to estimate $\alpha$, initial value of $\ell_0$
+
+This is all handled in R by the `ses()` function.
+
+```{r}
+data(oil)
+oildata = window(oil, start=1996)
+fc = ses(oildata, h=5)
+summary(fc)
+```
+
+
+What does the above tell us?
+
+alpha tells us that 79% of the forecasting is done on the first observation, then 
+
+((1 - .79) * .79)% on the second and the remaining on the remaining points.  $\ell_0$ is 448.1323.
+
+h was set to 5 to take us out the next 5 years.  This forecast is stored in the fc object.
+
+```{r}
+autoplot(fc) +
+  ylab("Oil (millions of tonnes)") +
+  xlab("Year")
+```
+
+## Holt's linear trend
+
+You need to add to the simple exponential smoothing a component for trending.  This leaves us with the following equasions:
+
+Forecast equation:   $\hat{y}_{t+h|t} = \ell_t + hb_t$
+
+Level (Smoothing equation):  $\ell_t = \alpha y_t + (1-\alpha)(\ell_{t-1} + b_{t-1})$
+
+Trend : $b_t = \beta^*(\ell_t - \ell_{t-1}) + (1 - \beta^*)b_{t-1}$
+
+Because the slope can change this is often called a "Local Linear Trend"
+
+Smaller $\beta^*$ means slower slope changes.  
+Larger $\beta^*$ means faster slope changes.
+
+There are now **4** parameters
+
+* 2 for smoothing $\alpha$ and $\beta^* (0 \leq \alpha,\beta^* \leq 1)$
+* 2 state parameters $\ell_0$ and $b_0$
+* Choose $\alpha, \beta^*, \ell_0, b_0 to minimize SSE$
+
+The **Holt** method will have a constant slope over time.
+
+The `holt()` function handles the minimizing of parameters.
+
+Here is an example of forecasting with Holt's method in R, forecasting for 5 years forward, using data from 1990 - 2004.
+
+
+
+```{r}
+ausair %>% 
+  window(start=1990, end=2004) %>%
+  holt(h=5) %>%
+  autoplot
+```
+
+## Damped trend method
+
+The Dampled trend method will allow the slope to dampen over time.  The equasions for this are:
+
+$\hat{y}_{t+h|t} = \ell_t + (\phi + \phi^2 + ... + \phi^h)b_t$  
+$\ell_t = \alpha y_t + (1 - \alpha)(\ell_{t-1} + \phi b_{t-1})$
+$b_t = \beta^*(\ell_t - \ell_{t-1}) + (1-\beta^*)\phi b_{t-1}$
+
+This is basically Holt's method with 1 extra parameter $\phi$ as a dampening parameter where $0 \leq \phi \leq 1$.  Where if $\phi = 1$ you have a linear trend identical to Holt's.
+
+With this, the **short-run forecasts** are _trended_ but the **long-run forecasts** are _constant_.
+
+**NOTE**: The **PI** parameter controls the upper/lower control bounds plotting. When FALSE, it's not displayed, when TRUE it is.  This is not documented in the help for `holt()`.
+
+To add **dampening** add the **damped=TRUE** option to the `holt()` function call.
+
+```{r}
+window(ausair, start=1990, end=2004) -> airpassengers
+
+holt(airpassengers, h=15, PI=FALSE) -> fc1
+holt(airpassengers, h=15, PI=FALSE, damped=TRUE) -> fc2
+
+autoplot(airpassengers) +
+  xlab("Year") +
+  ylab("millions") + 
+  autolayer(fc1, series="Linear trend") +
+  autolayer(fc2, series="Damped trend")
+```
+
+Below looks at visitors to austraila.
+
+Using the Holt function to forecast 10 years out.
+
+Note the checkrisudals has a high p-value so the residuals are not well correlated.  That's good!  
+The ACF chart shows all values are insignficant, the residuals "look like" white noise and are relatively normally distributed so these all point to a "good" model.  Or, at least a model that isn't missing any information.
+
+```{r}
+holt(austa, h=10) -> fc
+summary(fc)
+autoplot(fc)
+checkresiduals(fc)
+```
+
+## Exponential Smoothing methods with trenad and seasonality
+### Holt - Winters
+
+Holt - Winters works when there is both **trend** and **seasonality**
+2 versions, additive and multiplicative.
+
+The multaplicative method should be used if the seasonal variation increases with the level of the data.  This case it doesn't reall matter though.
+
+```{r}
+window(austourists, start=2005) -> aust
+
+hw(aust, seasonal="additive") -> fc1
+hw(aust, seasonal="multiplicative") -> fc2
+
+autoplot(austourists) +
+  autolayer(fc1, PI=FALSE, series="Additive") + 
+  autolayer(fc2, PI=FALSE, series="Multiplicative")
+```
+
+## Taxonomy of exponential smoothing methods
+<table border=1 black solid>
+<tr><th></th><th colspan=3>Seasonal Component</th></tr>
+<tr><th>Trend Component</th><th>N (None)</th><th>A (Additive)</th><th>M (Multiplicative)</th><tr>
+<tr><th>N (None)</th><td>(N, N)</td><td>(N, A)</td><td>(N, M)</td></tr>
+<tr><th>A (Additive)</td><td>(A, N)</td><td>(A, A)</td><td>(A, M)</td></tr>
+<tr><th>Ad (Additive Damped)</td><td>(Ad, N)</td><td>(Ad, N)</td><td>(Ad, N)</td></tr>
+</table>
+<table border=1 black solid>
+<tr><td>(N, N)</td><td>Simple exponential smoothing</td><td> ses()</td></tr>
+<tr><td>(A, N)</td><td> Holt's linear method</td><td> holt()</td></tr>
+<tr><td>(Ad, N) Additive damped trend method</td><td> hw()</td></tr>
+<tr><td>(A, A)</td><td> Additive Holt-Winter's method</td><td> hw()</td></tr>
+<tr><td>(A, M)</td><td> Multiplicative Holt-Winter's method</td><td> hw()</td></tr>
+<tr><td>(Ad, M)</td><td> Damped multiplicative Holt-Winter's method</td><td> hw()</td></tr>
+</table>
+
+
+```{r}
+
+# Plot the data
+autoplot(a10)
+
+# Produce 3 year forecasts
+fc1 <- hw(a10, h=36, seasonal='multiplicative')
+fc2 <- hw(a10, h=36, seasonal='additive')
+
+# Plot forecasts
+autoplot(a10) +
+  autolayer(fc1, series='Multiplicative') +
+  autolayer(fc2, series='Additive')
+```
+
+## Innovations state space models
+
+* Each exponential smoothing method can be written as an **"innovations state space model"**
+* Trend = ${N, A, A_d}$
+* Seasonal  = ${N, A, M}$
+* ERROR = ${A, M}$
+
+_3 x 3 = 9 possible exponential smoothing methods_
+
+## ETS models
+
+**E**rror, **T**rend, **S**easonality models
+
+* Parameters: estimated using the "likelihoo", the probability of the data arising from the specified model
+* For models with additive errors, this is **equivolent to minimizing SSE**
+* Choose the best model by minimizing a corrected version of Akaike's Information Criterion (AIC).  Similar to cross validation but much faster.
+
+The `ets()` function does this for you!
+
+for ausair the best model is **ETS(M, A, N)**.  This is a **M**ultiplicative errors, **A**dditive trend and **N**o seasonality.
+
+A difference between `ets()` and `hw()` is that it doesn't create the forecast, you need to take the output and put it into the `forecast()` function and plot that.
+
+We see in the example below the linear prediction.  And how the error grows over time from the multiplicative errors component.
+
+```{r}
+ets(ausair) -> fc
+print(fc)
+autoplot(fc)
+fc %>% forecast() %>% autoplot()
+```
+
+A seasonal example
+
+The model **ETS(M,Ad,M)** indicates **M**ultiplicative error, **A**dditive **d**ampening trend, **M**ultiplicative seasonality.
+
+**NOTE**: ETS(<error>, <trend>, <seasonality>)
+
+Note that because of the type of model there are many more parameters to estimate vs. the previous.
+
+```{r}
+ets(h02)
+ets(h02) %>% forecast() %>% autoplot()
+```
+
+## When ETS goes bad (Fails)
+
+```{r}
+autoplot(lynx)
+
+ets(lynx) -> fit
+
+summary(fit)
+
+fit %>% forecast(h=20) %>% autoplot()
+```
+

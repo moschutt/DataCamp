@@ -103,9 +103,8 @@ Box.test(pigs, lag=24, fitdf=0, type='Lj')
 autoplot(pigs)
 ```
 
-```{r}
 
-```
+
 
 
 

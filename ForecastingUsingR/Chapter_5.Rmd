@@ -1,0 +1,74 @@
+---
+title: "Data Camp / Forecasting Using R - Chapter 5"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+---
+
+Initialize and load the data
+
+```{r}
+library(ggplot2)
+library(forecast)
+library(fpp)
+```
+
+Chapter 5 of [Data Camp - Forecasting Using R](https://www.datacamp.com/courses/forecasting-using-r)
+
+## Dynamic Regression
+
+Including **external** variables.  It is similar to a **regression** but the _error term_ is an ARIMA process.
+
+$y_t = \beta_0 + \beta_1 x_{1,t}+ ... + \beta_r x_{r,t} + e_t$
+
+The **error term** is an ARIMA process, vs. normal Regression where it is _white noise_.
+
+The **ARIMA** process is where the historical informatino about the time series is incorporated.
+
+It is modeled with the `auto.arima()` function but with an additional argument, **xreg=** which takes a matrix of predictor variables to include in the model.
+
+The forecast will require forecasted predictor values as well.  This is done wiht the **xreg=** argument which takes a matrix of the predictor values.
+
+## Dyname harmonic regression
+
+Periodic seasonality can be handled using pairs of Fourier terms:
+
+$s_k(t) = sin(\frac{2\pi kt}{m})$  $c_k(t) = cos(\frac{2\pi kt}{m})$
+
+$y_t = \beta_0 + \sum_{K=1}^K[\alpha_K s_k(t) + \gamma_K c_K(t)] + e_t$
+
+* m = seasonal period
+* Every periodc function can be approximated in terms of sin and cos terms for large enough $K$
+* $\alpha_k$ and $\gamma_k$ are coefficients
+* $e_t$ can be modeled as a non-seasonal ARIMA process
+
+This method, using the Fourier terms, assumes the seasonal pattern does **NOT** change over time, whereas a seasonal ARIMA can handle models with changing seasonality.
+
+Below will performs a log transformation, **labmda=0**, indicates to **NOT** do a seasonal ARIMA on the errors.
+
+```{r}
+fit = auto.arima(cafe, xreg=fourier(cafe, K=1), seasonal=FALSE, lambda=0)
+fit %>% forecast(xreg=fourier(cafe, K=1, h=24)) %>%
+  autoplot() + ylim(1.6, 5.1)
+```
+
+
+$y_t =\beta_0 + \beta_1 x_{t,1} + ... + \beta_{t,r} x_{t,r} + \sum_{K=1}^K[\alpha_K s_k(t) + \gamma_K c_K(t)] + e_t$
+
+* Choose K to minimize AICc
+* K can not be more than m/2
+
+Using Fourier approach can handle very large sesonal periods.
+
+## TBATS model
+
+* Trigonometric terms for seasonality
+* Box-Cox transformations for heterogeneity
+* ARIMA errors for short-term dynamics
+* Trend (possibly damped)
+* Seasonal (including multiple and non-integer periods)
+
+And best of all, they are automatgic!  **WARNING**: This can be dangerous as they do not always pick the best values.
+
+TBATS is good for non-integer seasonality and multiple seasonal periods **BUT** does not always do a good job of predicting.
