@@ -1,0 +1,26 @@
+name: course-notes
+navbar:
+  title: "Datacamp Course Notes"
+  left:
+    - text: "Intro To Time Series Analsys"
+      menu:
+        - text: Chapter 1
+          href: IntroToTimeSeriesAnalysis/Chapter_1.html
+        - text: Chapter 2
+          href: IntroToTimeSeriesAnalysis/Chapter_2.html
+        - text: Chapter 3
+          href: IntroToTimeSeriesAnalysis/Chapter_3.html
+        - text: Chapter 4
+          href: IntroToTimeSeriesAnalysis/Chapter_4.html
+        - text: Chapter 5
+          href: IntroToTimeSeriesAnalysis/Chapter_5.html
+      - text: "ARIMA Modeling with R"
+        menu:
+        - text: Chapter 1
+          href: ARIMAModelingWithR/Chapter_1.html
+        - text: Chapter 2
+          href: ARIMAModelingWithR/Chapter_2.html
+        - text: Chapter 3
+          href: ARIMAModelingWithR/Chapter_3.html
+        - text: Chapter 4
+          href: ARIMAModelingWithR/Chapter_4.html

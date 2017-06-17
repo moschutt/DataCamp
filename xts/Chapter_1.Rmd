@@ -1,8 +1,9 @@
 ---
 title: "Data Camp / xts - Chapter 1"
 output:
-  pdf_document: default
+  html_document: default
   html_notebook: default
+  pdf_document: default
 ---
 
 Chapter 1 of Data Camp xts class excersizes
