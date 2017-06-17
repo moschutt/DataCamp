@@ -1,0 +1,205 @@
+---
+title: "Data Camp / Manipulating Time Series Data in R: Case Studies - Chapter 1"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Initialize and load the data
+
+```{r}
+library(readr)
+library(dplyr)
+library(xts)
+library(zoo)
+```
+
+Chapter 1 of [Data Camp - Manipulating Time Series Data in R: Case Studies](https://www.datacamp.com/courses/manipulating-time-series-data-in-r-case-studies)
+
+## Logan Airport - Reverse Engineer
+
+### Get data
+
+1. Go To [Beureau of Transportation Statistics](https://www.transtats.bts.gov/)
+2. Search on _on time delay_
+3. Select _Airlin On-Tim Statistics and Delay Causes_ https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp
+4. Select the date range (2010/01 - 2015/12) an download the data.
+5. Unzip the data to get the .csv
+
+```{r}
+read_csv('data/324015381_32017_2459_airline_delay_causes.csv') -> raw_data
+```
+
+### Prep the data
+
+What's the data look like and what do we want?
+
+```{r}
+glimpse(raw_data)
+```
+
+```{r}
+head(raw_data, n=2)
+```
+
+### Get the same data
+
+There are some low hangin fruits.  For instance, we are interested only in monthly data for "ALL" carriers, so we can summarize the data.  Next, the date is represented as Year and Month separately so we can combine these into a single value.  Also, We know the data is for Logan in boston so we can drop the airport and airport_name fields, not required.  Finally, what the hell is X22?  No idea so let's loose it.
+
+```{r}
+mutate(raw_data, date=sprintf("%04d-%02d-01", as.numeric(year), as.numeric(month))) %>%
+  select(-year, -month, -carrier, -carrier_name, -airport, -airport_name, -X22) %>%
+  (function(.data) {aggregate(. ~ date, .data, sum)}) %>%
+  select(total_flights=arr_flights, delay_flights=arr_del15, cancel_flights=arr_cancelled,
+         divert_fligths=arr_diverted, date) -> flights
+
+glimpse(flights)
+```
+
+The course dataset has 5 columns:
+
+* total_flights
+* delay_flights
+* cancel_flights
+* divert_flights
+* date
+
+By comparing the vlaues of the first few records we find that the above are:
+
+* arr_flights
+* arr_del15
+* arr_canceled
+* arr_diverted
+
+## Analysis
+
+Now to the analysis from the course
+
+### Getting to know you
+
+To start get to know your data...  So we did above but let's stay true to the course.
+
+What's the **str**ucture of the data?  
+What's the data look like?  
+We need the date, what's the dates format?
+
+```{r}
+str(flights)
+head(flights, n=5)
+class(flights$date)
+```
+
+
+
+### Fixing the data
+
+Essential in data analysis, bad in relationships
+
+The date needs to be converted to a Time structure and the xts structure created.
+
+```{r}
+flights$date = as.Date(flights$date)
+flights_xts = xts(flights[,-5], order.by=flights$date)
+class(flights_xts)
+head(flights_xts, n=5)
+```
+
+### Qaulities of the data
+
+* Periodicity
+* Scope
+* Comprehensiveness.
+
+Use the `periodicity()` function in the **xts** library to get the periodicity of the data.  
+Use the `ndays()` or `nmonths()`, `nyears()`, etc.  To get the number of periods in the data.  
+Remember that an **xts** object can be sub-setted by dates and partial dates using the ISO format.
+
+```{r}
+periodicity(flights_xts)
+ndays(flights_xts)
+nmonths(flights_xts)
+flights_xts['201406']
+```
+
+### Plotting data
+
+**xts** offers a simple way to plot an xts dataset, `plot.xts()`.  This takes a single argument, an xts object, and uses the date indes as the x axis.
+
+For more complex charts you can use the `plot.zoo()` function.  This provides for plotting multple columns of data in different ways, single panel or multiple panels and provides control over indexes.
+
+```{r}
+labels = c("Total" , "Delay",  "Cancel", "Divert")
+lty = c(1,2,3,4)
+
+plot.xts(flights_xts$total_flights)
+
+# Use plot.xts() to view monthly delayed flights into BOS over time
+plot.xts(flights_xts$delay_flights)
+
+# Use plot.zoo() to view all four columns of data in their own panels
+plot.zoo(flights_xts, plot.type = "multiple", ylab = labels)
+
+# Use plot.zoo() to view all four columns of data in one panel
+plot.zoo(flights_xts, plot.type = "single", lty = lty)
+legend("right", lty = lty, legend = labels)
+```
+
+### Creating new variables
+
+Let's calculate the % of delays, missed, etc.
+
+```{r}
+# Calculate percentage of flights delayed each month: pct_delay
+flights_xts$pct_delay <- ((flights_xts$delay_flights) / flights_xts$total_flights) * 100
+
+# Use plot.xts() to view pct_delay over time
+plot.xts(flights_xts$pct_dela)
+
+# Calculate percentage of flights cancelled each month: pct_cancel
+flights_xts$pct_cancel <- ((flights_xts$cancel_flights) / flights_xts$total_flights) * 100
+
+# Calculate percentage of flights diverted each month: pct_divert
+flights_xts$pct_divert <- ((flights_xts$divert_flights) / flights_xts$total_flights) * 100
+
+# Use plot.zoo() to view all three trends over time
+plot.zoo(x = flights_xts[ , c("pct_delay", "pct_cancel", "pct_divert")])
+```
+
+### Saving your data
+
+There are several ways to save data from an xts object.  The preferred method is to save it as an RDS file with the `saveRDS()` function.  This preserves the full object.  In cases where you need to exchange the data with someone who may not be using R, you can use the `write.zoo()` function to write the data as a .csv file.  However, if you use this method and then read the data back in with `read.zoo()`, you will need to convert it back to an **xts** object with `as.xts()`.
+
+```{r}
+# Save your xts object to rds file using saveRDS
+saveRDS(object = flights_xts, file = "flights_xts.rds")
+
+# Read your flights_xts data from the rds file
+flights_xts2 <- readRDS("flights_xts.rds")
+
+# Check the class of your new flights_xts2 object
+class(flights_xts2)
+
+# Examine the first five rows of your new flights_xts2 object
+head(flights_xts2)
+```
+
+Now to .csv
+
+```{r}
+# Export your xts object to a csv file using write.zoo
+write.zoo(flights_xts, file = "flights_xts.csv", sep = ",")
+
+# Open your saved object using read.zoo
+flights2 <- read.zoo("flights_xts.csv", sep = ",", FUN = as.Date, header = TRUE, index.column = 1)
+
+# Encode your new object back into xts
+flights_xts2 <- as.xts(flights2)
+
+# Examine the first five rows of your new flights_xts2 object
+head(flights_xts2, n=5)
+```
+
+
+
+
+

@@ -84,6 +84,7 @@ If any of these and possibly others, are true it is **NOT** _WN_
 * The variance is changing over time
 
 The `arima.sim()` function can simulate a _WN_ dataset.  `arima.sim(model=list(order=c(0,0,0)), n=50)`.
+
 #### ARIMA
 
 **A**uto**R**egressive **I**ntegrated **M**oving **A**verage
